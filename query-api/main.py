@@ -7,7 +7,14 @@ from models import Trace, Span, App, Error
 import uuid
 
 app = FastAPI(title="FlowLog Query API")
+from fastapi.middleware.cors import CORSMiddleware
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "query-api"}
