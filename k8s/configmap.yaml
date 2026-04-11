@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flowlog-config
+  namespace: flowlog
+data:
+  KAFKA_URL: "192.168.1.155:9092"
+  DATABASE_URL: "postgresql://flowlog:flowlog123@192.168.1.155:5433/flowlog"
+  DB_URL: "postgres://flowlog:flowlog123@192.168.1.155:5433/flowlog?sslmode=disable"
+  KAFKA_BOOTSTRAP_SERVERS: "192.168.1.155:9092"

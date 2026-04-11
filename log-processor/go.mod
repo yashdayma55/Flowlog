@@ -1,6 +1,6 @@
 module flowlog/log-processor
 
-go 1.26.2
+go 1.22
 
 require (
 	github.com/klauspost/compress v1.15.9 // indirect
