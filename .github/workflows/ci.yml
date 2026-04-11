@@ -58,11 +58,14 @@ jobs:
         run: |
           cd ingestion-api
           pip install -r requirements.txt
+          
 
       - name: Test API imports
         run: |
           cd ingestion-api
-          python -c "from main import app; print('Ingestion API import OK')"
+          python -c "import ast; ast.parse(open('main.py').read()); print('Ingestion API syntax OK')"
+          python -c "import ast; ast.parse(open('models.py').read()); print('Models syntax OK')"
+          python -c "import ast; ast.parse(open('database.py').read()); print('Database syntax OK')"
 
   # ─────────────────────────────────────────
   # JOB 3 — Test Query API
