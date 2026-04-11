@@ -1,0 +1,171 @@
+name: FlowLog CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+
+jobs:
+
+  # ─────────────────────────────────────────
+  # JOB 1 — Test Python SDK
+  # ─────────────────────────────────────────
+  test-sdk:
+    name: Test Python SDK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install SDK dependencies
+        run: |
+          cd sdk
+          pip install requests pytest
+
+      - name: Test SDK imports
+        run: |
+          cd sdk
+          python -c "from flowlog_sdk import trace, init; print('SDK import OK')"
+
+  # ─────────────────────────────────────────
+  # JOB 2 — Test Ingestion API
+  # ─────────────────────────────────────────
+  test-ingestion-api:
+    name: Test Ingestion API
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          cd ingestion-api
+          pip install -r requirements.txt
+
+      - name: Test API imports
+        run: |
+          cd ingestion-api
+          python -c "from main import app; print('Ingestion API import OK')"
+
+  # ─────────────────────────────────────────
+  # JOB 3 — Test Query API
+  # ─────────────────────────────────────────
+  test-query-api:
+    name: Test Query API
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          cd query-api
+          pip install -r requirements.txt
+
+      - name: Test API imports
+        run: |
+          cd query-api
+          python -c "from main import app; print('Query API import OK')"
+
+  # ─────────────────────────────────────────
+  # JOB 4 — Build Go Processor
+  # ─────────────────────────────────────────
+  test-log-processor:
+    name: Build Go Log Processor
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Build Go processor
+        run: |
+          cd log-processor
+          go mod tidy
+          go build -o log-processor main.go consumer.go processor.go
+          echo "Go build OK"
+
+  # ─────────────────────────────────────────
+  # JOB 5 — Build & Push Docker Images
+  # Only runs on push to main (not PRs)
+  # ─────────────────────────────────────────
+  build-and-push:
+    name: Build & Push Docker Images
+    runs-on: ubuntu-latest
+    needs: [test-sdk, test-ingestion-api, test-query-api, test-log-processor]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push Ingestion API
+        uses: docker/build-push-action@v5
+        with:
+          context: ./ingestion-api
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/flowlog-ingestion-api:latest
+            ${{ secrets.DOCKER_USERNAME }}/flowlog-ingestion-api:${{ github.sha }}
+
+      - name: Build and push Query API
+        uses: docker/build-push-action@v5
+        with:
+          context: ./query-api
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/flowlog-query-api:latest
+            ${{ secrets.DOCKER_USERNAME }}/flowlog-query-api:${{ github.sha }}
+
+      - name: Build and push Log Processor
+        uses: docker/build-push-action@v5
+        with:
+          context: ./log-processor
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/flowlog-log-processor:latest
+            ${{ secrets.DOCKER_USERNAME }}/flowlog-log-processor:${{ github.sha }}
+
+      - name: Pipeline Success
+        run: |
+          echo "✅ All images built and pushed successfully"
+          echo "Ingestion API: ${{ secrets.DOCKER_USERNAME }}/flowlog-ingestion-api:${{ github.sha }}"
+          echo "Query API: ${{ secrets.DOCKER_USERNAME }}/flowlog-query-api:${{ github.sha }}"
+          echo "Log Processor: ${{ secrets.DOCKER_USERNAME }}/flowlog-log-processor:${{ github.sha }}"
